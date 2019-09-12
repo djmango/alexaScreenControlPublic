@@ -1,0 +1,47 @@
+version: '3.3'
+services:
+    duckdns:
+        image: linuxserver/duckdns
+        container_name: duckdns
+        environment:
+            - TZ=America/NewYork
+            - SUBDOMAINS=thisisnotatest
+            - TOKEN=REPLACETHIS
+            - LOG_FILE=true
+        restart: always
+    nginx:
+        image: nginx:1.17.1-alpine
+        container_name: nginx
+        depends_on:
+            - flask
+        volumes:
+            - ./nginx.conf:/etc/nginx/conf.d/default.conf
+            - ./dehydrated/certs/thisisnotatest.duckdns.org:/certs/
+        networks:
+            - container-network
+        ports:
+            - 9001:9001
+        restart: always
+        command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+    flask:
+        build:
+            context: ./
+            dockerfile: Dockerfile
+        image: ubuntu:bionic
+        container_name: flask
+        volumes:
+            - ./:/app/
+        environment:
+            - FLASK_APP=/app/app.py
+            - LC_ALL=C.UTF-8
+            - LANG=C.UTF-8
+        command: bash -c "bash /app/dehydrated/dehydrated --cron && flask run --host=0.0.0.0"
+        restart: always
+        networks:
+            container-network:
+                aliases:
+                    - flask-app
+        ports:
+            - 8080:5000
+networks:
+    container-network:
